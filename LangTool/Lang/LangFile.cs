@@ -1,13 +1,17 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Xml.Serialization;
+using LangTool.Utility;
 
 namespace LangTool.Lang
 {
     [XmlRoot("LangFile")]
     public class LangFile
     {
+        private const int LittleEndianConstant = 0x0000454C; // LE
+        private const int BigEndianConstant = 0x00004542; // BE
         public LangFile()
         {
             Entries = new List<LangEntry>();
@@ -15,6 +19,9 @@ namespace LangTool.Lang
 
         [XmlArray("Entries")]
         public List<LangEntry> Entries { get; set; }
+
+        [XmlAttribute("Endianess")]
+        public Endianess Endianess { get; set; }
 
         public static LangFile ReadLangFile(Stream inputStream)
         {
@@ -27,8 +34,21 @@ namespace LangTool.Lang
         {
             BinaryReader reader = new BinaryReader(inputStream, Encoding.UTF8, true);
             int magicNumber = reader.ReadInt32();
-            int constant2 = reader.ReadInt32();
+            int version = reader.ReadInt32();
             int endianess = reader.ReadInt32();
+            switch (endianess)
+            {
+                case LittleEndianConstant: // LE
+                    Endianess = Endianess.LittleEndian;
+                    break;
+                case BigEndianConstant: // BE
+                    Endianess = Endianess.BigEndian;
+                    version = EndianessBitConverter.FlipEndianess(version);
+                    reader = new BigEndianBinaryReader(inputStream, Encoding.UTF8, true);
+                    break;
+                default:
+                    throw new Exception(string.Format("Unknown endianess: {0:X}", endianess));
+            }
             int entryCount = reader.ReadInt32();
             int headerSize = reader.ReadInt32();
             int offsetKeys = reader.ReadInt32();
